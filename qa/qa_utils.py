@@ -717,6 +717,16 @@ def GetNonexistentGroups(count):
   return GetNonexistentEntityNames(count, "groups", "group")
 
 
+def GetNonexistentNetworks(count):
+  """Gets network names which shouldn't exist on the cluster.
+
+  @param count: Number of networks to get
+  @rtype: integer
+
+  """
+  return GetNonexistentEntityNames(count, "networks", "network")
+
+
 def GetNonexistentEntityNames(count, name_config, name_prefix):
   """Gets entity names which shouldn't exist on the cluster.
 

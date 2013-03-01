@@ -193,7 +193,7 @@
     "group-rwops": true,
     "group-custom-ssh-port": true,
 
-    "network": false,
+    "network": true,
 
     "node-list": true,
     "node-info": true,
