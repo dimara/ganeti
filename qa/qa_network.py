@@ -98,15 +98,15 @@ def GetNetOption(idx=-1, action=None, mac=None, ip=None, network=None,
 
 
 def RemoveInstance(instance):
-  name = instance["name"]
+  name = instance.name
   AssertCommand(["gnt-instance", "remove", "-f", name])
-  qa_config.ReleaseInstance(instance)
+  instance.Release()
 
 
 def LaunchInstance(instance, mac=None, ip=None, network=None,
                    mode=None, link=None, fail=False):
 
-  name = instance["name"]
+  name = instance.name
   net = GetNetOption(0, None, mac, ip, network, mode, link)
   AssertCommand(["gnt-instance", "add", "-o", "debootstrap+default",
                  "-t", "file", "--disk", "0:size=1G", "--net", net,
@@ -117,21 +117,21 @@ def LaunchInstance(instance, mac=None, ip=None, network=None,
 def ModifyInstance(instance, idx=-1, action="add", mac=None,
                    ip=None, network=None, mode=None, link=None, fail=False):
 
-  name = instance["name"]
+  name = instance.name
   net = GetNetOption(idx, action, mac, ip, network, mode, link)
   AssertCommand(["gnt-instance", "modify", "--net", net, name], fail=fail)
 
 
 def TestNetworkAddRemove():
   """gnt-network add/remove"""
-  (network1, network2, network3, ) = qa_utils.GetNonexistentNetworks(3)
+  (network1, network2, network3) = qa_utils.GetNonexistentNetworks(3)
 
   # Note: Using RFC5737 addresses.
   # Add a network without subnet
-  # TODO: make this fail=False once abstract networks are implemented
-  AssertCommand(["gnt-network", "add", network1], fail=True)
+  AssertCommand(["gnt-network", "add", network1])
+  AssertCommand(["gnt-network", "remove", network1])
   # remove non-existing network
-  AssertCommand(["gnt-network", "remove", network1], fail=True)
+  AssertCommand(["gnt-network", "remove", network2], fail=True)
 
   # Check wrong opcode parameters
   # wrone cidr notation
@@ -207,7 +207,7 @@ def TestNetworkSetParams():
   AssertCommand(["gnt-network", "modify", "--gateway", GW2_IN_NET_1,
                  "--network6", TEST_NET6_2,
                  "--gateway6", GW_IN_NET6_2,
-                 network1])
+                network1])
 
   # reset everything
   AssertCommand(["gnt-network", "modify", "--gateway", "none",
@@ -276,7 +276,7 @@ def TestNetworkConnect():
 
 def TestInstanceAddAndNetAdd():
   """ gnt-istance add / gnt-instance modify --net -1:add """
-  (network1, network2) = qa_utils.GetNonexistentNetworks(2)
+  (network1, network2, network3) = qa_utils.GetNonexistentNetworks(3)
   defmode, deflink = GetNicParams()
 
   AssertCommand(["gnt-network", "add", "--network", TEST_NET_1,
@@ -289,6 +289,8 @@ def TestInstanceAddAndNetAdd():
   AssertCommand(["gnt-network", "add", "--network", TEST_NET_2, network2])
   AssertCommand(["gnt-network", "connect", network2, "routed", "rt5000"])
 
+  AssertCommand(["gnt-network", "add", network3])
+  AssertCommand(["gnt-network", "connect", network3, "routed", "rt100"])
 
   # (mac, ip, network, mode, link)
   success_cases = [
@@ -308,6 +310,18 @@ def TestInstanceAddAndNetAdd():
                    ip=ip, network=network, mode=mode, link=link)
     ModifyInstance(instance1, idx=1, action="remove")
     RemoveInstance(instance1)
+
+  # test _AllIPs()
+  instance1 = qa_config.AcquireInstance()
+  LaunchInstance(instance1, ip="10.10.10.10")
+  # this results to "Configuration data not consistent
+  ModifyInstance(instance1, idx=-1, action="add", ip="10.10.10.10")
+  ModifyInstance(instance1, idx=-1, action="add",
+                 ip="10.10.10.10", network=network3)
+  # this raises Corrupt configuration data
+  ModifyInstance(instance1, idx=-1, action="add",
+                 ip="10.10.10.10", network=network3, fail=True)
+  RemoveInstance(instance1)
 
   fail_cases = [
     (None, None, None, "lala", None),
@@ -335,6 +349,8 @@ def TestInstanceAddAndNetAdd():
   AssertCommand(["gnt-network", "remove", network1])
   AssertCommand(["gnt-network", "disconnect", network2])
   AssertCommand(["gnt-network", "remove", network2])
+  AssertCommand(["gnt-network", "disconnect", network3])
+  AssertCommand(["gnt-network", "remove", network3])
 
 
 def TestInstanceNetMod():
