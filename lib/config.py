@@ -778,10 +778,9 @@ class ConfigWriter(object):
       raise errors.ReservationError("IP address already in use")
     if check and isextreserved:
       raise errors.ReservationError("IP is externally reserved")
-    if pool.IsReserved(address):
-      raise errors.OpPrereqError("IP address '%s' already in use." %
-                                 address, errors.ECODE_EXISTS)
-
+    if (address, net_uuid) in self._AllIPs():
+      raise errors.ConfigurationError("Address '%s' already exists in"
+                                      " network '%s'" % (address, nobj.name))
     return self._temporary_ips.Reserve(ec_id,
                                        (constants.RESERVE_ACTION,
                                         address, net_uuid, external))
@@ -887,6 +886,20 @@ class ConfigWriter(object):
     for instance in self._ConfigData().instances.values():
       for nic in instance.nics:
         result.append(nic.mac)
+
+    return result
+
+  def _AllIPs(self):
+    """Return all (IP, Network) present in the config.
+
+    @rtype: list of tuples
+    @return: the list of all IP, Network tuples
+
+    """
+    result = []
+    for instance in self._config_data.instances.values():
+      for nic in instance.nics:
+        result.append((nic.ip, nic.network))
 
     return result
 
