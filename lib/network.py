@@ -135,23 +135,27 @@ class GenericNetwork(object):
       assert self.gateway6 in self.network6 or self.gateway6.is_link_local
 
   def Contains(self, address):
-    addr = ipaddr.IPAddress(address)
-    if addr.version == constants.IP4_VERSION and self.network:
-      return addr in self.network
-    elif addr.version == constants.IP6_VERSION and self.network6:
-      return addr in self.network6
+    if address:
+      addr = ipaddr.IPAddress(address)
+      if addr.version == constants.IP4_VERSION and self.network:
+        return addr in self.network
+      elif addr.version == constants.IP6_VERSION and self.network6:
+        return addr in self.network6
+
+    return False
 
   def IsReserved(self, address):
-    raise NotImplementedError
+    return False
 
   def Reserve(self, address, external):
-    raise NotImplementedError
+    pass
 
   def Release(self, address, external):
-    raise NotImplementedError
+    pass
 
   def GenerateFree(self):
-    raise NotImplementedError
+    raise errors.OpPrereqError("Cannot generate IP in a Generic Network",
+                               errors.ECODE_INVAL)
 
   def GetStats(self):
     return {}
