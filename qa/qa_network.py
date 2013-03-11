@@ -31,7 +31,6 @@ from ganeti import query
 
 from qa_utils import AssertCommand
 
-
 TEST_NET_1 = "192.0.2.0/24"
 TEST_NET_2 = "198.51.100.0/24"
 TEST_NET_3 = "203.0.113.0/24"
@@ -103,13 +102,18 @@ def RemoveInstance(instance):
   instance.Release()
 
 
+def GetInstance():
+  return qa_config.AcquireInstance()
+
+
 def LaunchInstance(instance, mac=None, ip=None, network=None,
                    mode=None, link=None, fail=False):
 
   name = instance.name
+  templ = qa_config.GetDefaultDiskTemplate()
   net = GetNetOption(0, None, mac, ip, network, mode, link)
-  AssertCommand(["gnt-instance", "add", "-o", "debootstrap+default",
-                 "-t", "file", "--disk", "0:size=1G", "--net", net,
+  AssertCommand(["gnt-instance", "add", "-o", qa_config.get("os"),
+                 "-t", templ, "--disk", "0:size=1G", "--net", net,
                  "--no-name-check", "--no-ip-check", "--no-install", name],
                  fail=fail)
 
@@ -246,7 +250,7 @@ def TestNetworkConnect():
   # Network still connected
   AssertCommand(["gnt-network", "remove", network1], fail=True)
 
-  instance1 = qa_config.AcquireInstance()
+  instance1 = GetInstance()
   # Add instance inside the network
   LaunchInstance(instance1, ip="pool", network=network1)
   # Conflicting IP, at least one instance belongs to the network
@@ -263,7 +267,7 @@ def TestNetworkConnect():
   # This should only produce a warning.
   AssertCommand(["gnt-network", "disconnect", network1])
 
-  instance1 = qa_config.AcquireInstance()
+  instance1 = GetInstance()
   # TODO: add conflicting image.
   LaunchInstance(instance1, ip=IP_IN_NET_2)
   # Conflicting IPs
@@ -300,11 +304,11 @@ def TestInstanceAddAndNetAdd():
     # TODO: include this use case with --no-conflicts-check
     #       just add an extra field in Launch|ModifyInstance
     #(None, "192.168.1.6", None, None, None), # IP but no net
-    (None, None, network1, None, None) # nicparams/mac  inherited by network
+    (None, None, network1, None, None), # nicparams/mac  inherited by network
     ]
 
   for (mac, ip, network, mode, link) in success_cases:
-    instance1 = qa_config.AcquireInstance()
+    instance1 = GetInstance()
     LaunchInstance(instance1, mac, ip, network, mode, link)
     ModifyInstance(instance1, idx=-1, action="add", mac=mac,
                    ip=ip, network=network, mode=mode, link=link)
@@ -330,11 +334,11 @@ def TestInstanceAddAndNetAdd():
     (None, IP_IN_NET_2, None, None, None), # conflicting IP
     (None, None, None, "routed", None), # routed with no IP
     (None, "pool", network1, "routed", None), # nicparams along with network
-    (None, "pool", network1, None, deflink)
+    (None, "pool", network1, None, deflink),
    ]
 
-  instance1 = qa_config.AcquireInstance()
-  instance2 = qa_config.AcquireInstance()
+  instance1 = GetInstance()
+  instance2 = GetInstance()
   LaunchInstance(instance2)
   for (mac, ip, network, mode, link) in fail_cases:
     LaunchInstance(instance1, mac=mac, ip=ip, network=network,
@@ -372,10 +376,10 @@ def TestInstanceNetMod():
     (None, IP2_IN_NET_1, network1, None, None), # IP inside network
     #TODO: include this use case with --no-conflickts-check
     #(None, IP2_IN_NET_1, None, None, None), # IP but no net
-    (None, None, network1, None, None) # nicparams/mac  inherited by network
+    (None, None, network1, None, None), # nicparams/mac  inherited by network
     ]
 
-  instance1 = qa_config.AcquireInstance()
+  instance1 = GetInstance()
   LaunchInstance(instance1)
   for (mac, ip, network, mode, link) in success_cases:
     ModifyInstance(instance1, idx=0, action="modify", mac=mac,
