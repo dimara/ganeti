@@ -224,7 +224,8 @@ $(buildObject "Network" "network" $
   [ simpleField "name"             [t| NonEmptyString |]
   , optionalField $
     simpleField "mac_prefix"       [t| String |]
-  , simpleField "network"          [t| Ip4Network |]
+  , optionalField $
+    simpleField "network"          [t| Ip4Network |]
   , optionalField $
     simpleField "network6"         [t| String |]
   , optionalField $

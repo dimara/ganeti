@@ -278,7 +278,7 @@ genValidNetwork = do
   uuid <- arbitrary
   ctime <- arbitrary
   mtime <- arbitrary
-  let n = Network name mac_prefix (Ip4Network net netmask) net6 gateway
+  let n = Network name mac_prefix (Just $ Ip4Network net netmask) net6 gateway
           gateway6 res ext_res uuid ctime mtime 0 Set.empty
   return n
 
@@ -426,9 +426,13 @@ casePyCompatNetworks = do
               \decoded = [objects.Network.FromDict(n) for n in net_data]\n\
               \encoded = []\n\
               \for net in decoded:\n\
-              \  a = network.AddressPool(net)\n\
-              \  encoded.append((a.GetFreeCount(), a.GetReservedCount(), \\\n\
-              \    net.ToDict()))\n\
+              \  a = network.Network(net)\n\
+              \  if net.network:\n\
+              \    encoded.append((a._GetFreeCount(), a._GetReservedCount(), \\\n\
+              \                   net.ToDict()))\n\
+              \  else:\n\
+              \    encoded.append((-1, -1, \\\n\
+              \                   net.ToDict()))\n\
               \print serializer.Dump(encoded)" serialized
     >>= checkPythonResult
   let deserialised = J.decode py_stdout::J.Result [(Int, Int, Network)]

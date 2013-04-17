@@ -39,6 +39,7 @@ module Ganeti.Network
   ) where
 
 import qualified Data.Vector.Unboxed as V
+import Data.Maybe (isJust)
 
 import Ganeti.Objects
 
@@ -52,13 +53,18 @@ data AddressPool = AddressPool { network :: Network,
 -- | Create an address pool from a network.
 createAddressPool :: Network -> Maybe AddressPool
 createAddressPool n
-  | networkIsValid n =
+  | networkHasPool n =
       let res = maybeStr2BitVec $ networkReservations n
           ext_res = maybeStr2BitVec $ networkExtReservations n
       in  Just AddressPool { reservations = res
                            , extReservations = ext_res
                            , network = n }
   | otherwise = Nothing
+
+-- | Checks the consistency of the network object. So far, only checks the
+-- length of the reservation strings.
+networkHasPool :: Network -> Bool
+networkHasPool = isJust . networkNetwork
 
 -- | Checks the consistency of the network object. So far, only checks the
 -- length of the reservation strings.

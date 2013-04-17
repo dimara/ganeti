@@ -50,7 +50,7 @@ networkFields =
   [ (FieldDefinition "name" "Network" QFTText "Name",
      FieldSimple (rsNormal . networkName), QffNormal)
   , (FieldDefinition "network" "Subnet" QFTText "IPv4 subnet",
-     FieldSimple (rsNormal . networkNetwork), QffNormal)
+     FieldSimple (rsMaybeUnavail . networkNetwork), QffNormal)
   , (FieldDefinition "gateway" "Gateway" QFTOther "IPv4 gateway",
      FieldSimple (rsMaybeUnavail . networkGateway), QffNormal)
   , (FieldDefinition "network6" "IPv6Subnet" QFTOther "IPv6 subnet",
@@ -150,8 +150,9 @@ getNetworkUuid cfg name =
 --
 -- This doesn't use the netmask for validation of the length, instead
 -- simply iterating over the reservations string.
-getReservations :: Ip4Network -> String -> [Ip4Address]
-getReservations (Ip4Network net _) =
+getReservations :: Maybe Ip4Network -> String -> [Ip4Address]
+getReservations Nothing = \_ -> []
+getReservations (Just $ Ip4Network net _) =
   reverse .
   fst .
   foldl' (\(accu, addr) c ->
