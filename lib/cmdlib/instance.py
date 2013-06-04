@@ -1144,14 +1144,8 @@ class LUInstanceCreate(LogicalUnit):
                                          errors.ECODE_STATE)
             self.LogInfo("Chose IP %s from network %s", nic.ip, nobj.name)
           else:
-            try:
-              self.cfg.ReserveIp(net_uuid, nic.ip, ec_id,
-                                 check=self.op.conflicts_check)
-            except errors.ReservationError:
-              raise errors.OpPrereqError("IP address %s already in use"
-                                         " or does not belong to network %s" %
-                                         (nic.ip, nobj.name),
-                                         errors.ECODE_NOTUNIQUE)
+            self.cfg.ReserveIp(net_uuid, nic.ip, ec_id,
+                               check=self.op.conflicts_check)
 
       # net is None, ip None or given
       elif self.op.conflicts_check:
@@ -3001,26 +2995,15 @@ class LUInstanceSetParams(LogicalUnit):
                                        errors.ECODE_INVAL)
         # Reserve new IP if in the new network if any
         elif new_net_uuid:
-          try:
-            self.cfg.ReserveIp(new_net_uuid, new_ip, ec_id,
-                               check=self.op.conflicts_check)
-            self.LogInfo("Reserving IP %s in network %s",
-                         new_ip, new_net_obj.name)
-          except errors.ReservationError:
-            raise errors.OpPrereqError("IP %s not available in network %s" %
-                                       (new_ip, new_net_obj.name),
-                                       errors.ECODE_NOTUNIQUE)
+          self.cfg.ReserveIp(new_net_uuid, new_ip, ec_id,
+                             check=self.op.conflicts_check)
         # new network is None so check if new IP is a conflicting IP
         elif self.op.conflicts_check:
           _CheckForConflictingIp(self, new_ip, pnode_uuid)
 
       # release old IP if old network is not None
       if old_ip and old_net_uuid:
-        try:
-          self.cfg.ReleaseIp(old_net_uuid, old_ip, False, ec_id)
-        except errors.AddressPoolError:
-          logging.warning("Release IP %s not contained in network %s",
-                          old_ip, old_net_obj.name)
+        self.cfg.ReleaseIp(old_net_uuid, old_ip, False, ec_id)
 
     # there are no changes in (ip, network) tuple and old network is not None
     elif (old_net_uuid is not None and

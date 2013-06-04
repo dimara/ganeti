@@ -166,23 +166,14 @@ class LUNetworkAdd(LogicalUnit):
     if self.op.conflicts_check:
       for node in self.cfg.GetAllNodesInfo().values():
         for ip in [node.primary_ip, node.secondary_ip]:
-          try:
-            if self.pool.Contains(ip):
-              self.pool.Reserve(ip, True)
-              self.LogInfo("Reserved IP address of node '%s' (%s)",
-                           node.name, ip)
-          except errors.AddressPoolError, err:
-            self.LogWarning("Cannot reserve IP address '%s' of node '%s': %s",
-                            ip, node.name, err)
+          if self.pool.Contains(ip):
+            self.pool.Reserve(ip, True)
+            self.LogInfo("Reserved IP address of node '%s' (%s)", node.name, ip)
 
       master_ip = self.cfg.GetClusterInfo().master_ip
-      try:
-        if self.pool.Contains(master_ip):
-          self.pool.Reserve(master_ip, True)
-          self.LogInfo("Reserved cluster master IP address (%s)", master_ip)
-      except errors.AddressPoolError, err:
-        self.LogWarning("Cannot reserve cluster master IP address (%s): %s",
-                        master_ip, err)
+      if self.pool.Contains(master_ip):
+        self.pool.Reserve(master_ip, True)
+        self.LogInfo("Reserved cluster master IP address (%s)", master_ip)
 
     if self.op.add_reserved_ips:
       for ip in self.op.add_reserved_ips:
