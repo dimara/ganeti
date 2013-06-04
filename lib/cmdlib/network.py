@@ -126,6 +126,21 @@ class LUNetworkAdd(LogicalUnit):
     for tag in self.op.tags:
       objects.TaggableObject.ValidateTag(tag)
 
+    self.nobj = objects.Network(name=self.op.network_name,
+                                network=self.op.network,
+                                gateway=self.op.gateway,
+                                network6=self.op.network6,
+                                gateway6=self.op.gateway6,
+                                mac_prefix=self.op.mac_prefix,
+                                uuid=self.network_uuid)
+
+    # Initialize the associated address pool
+    try:
+      self.pool = network.AddressPool.InitializeNetwork(self.nobj)
+    except errors.AddressPoolError, err:
+      raise errors.OpPrereqError("Cannot create IP address pool for network"
+                               " '%s': %s" % (self.op.network_name, err))
+
   def BuildHooksEnv(self):
     """Build hooks env.
 
@@ -145,20 +160,6 @@ class LUNetworkAdd(LogicalUnit):
     """Add the ip pool to the cluster.
 
     """
-    nobj = objects.Network(name=self.op.network_name,
-                           network=self.op.network,
-                           gateway=self.op.gateway,
-                           network6=self.op.network6,
-                           gateway6=self.op.gateway6,
-                           mac_prefix=self.op.mac_prefix,
-                           uuid=self.network_uuid)
-    # Initialize the associated address pool
-    try:
-      pool = network.AddressPool.InitializeNetwork(nobj)
-    except errors.AddressPoolError, err:
-      raise errors.OpExecError("Cannot create IP address pool for network"
-                               " '%s': %s" % (self.op.network_name, err))
-
     # Check if we need to reserve the nodes and the cluster master IP
     # These may not be allocated to any instances in routed mode, as
     # they wouldn't function anyway.
@@ -166,8 +167,8 @@ class LUNetworkAdd(LogicalUnit):
       for node in self.cfg.GetAllNodesInfo().values():
         for ip in [node.primary_ip, node.secondary_ip]:
           try:
-            if pool.Contains(ip):
-              pool.Reserve(ip, external=True)
+            if self.pool.Contains(ip):
+              self.pool.Reserve(ip, True)
               self.LogInfo("Reserved IP address of node '%s' (%s)",
                            node.name, ip)
           except errors.AddressPoolError, err:
@@ -176,8 +177,8 @@ class LUNetworkAdd(LogicalUnit):
 
       master_ip = self.cfg.GetClusterInfo().master_ip
       try:
-        if pool.Contains(master_ip):
-          pool.Reserve(master_ip, external=True)
+        if self.pool.Contains(master_ip):
+          self.pool.Reserve(master_ip, True)
           self.LogInfo("Reserved cluster master IP address (%s)", master_ip)
       except errors.AddressPoolError, err:
         self.LogWarning("Cannot reserve cluster master IP address (%s): %s",
@@ -186,16 +187,16 @@ class LUNetworkAdd(LogicalUnit):
     if self.op.add_reserved_ips:
       for ip in self.op.add_reserved_ips:
         try:
-          pool.Reserve(ip, external=True)
+          self.pool.Reserve(ip, external=True)
         except errors.AddressPoolError, err:
           raise errors.OpExecError("Cannot reserve IP address '%s': %s" %
                                    (ip, err))
 
     if self.op.tags:
       for tag in self.op.tags:
-        nobj.AddTag(tag)
+        self.nobj.AddTag(tag)
 
-    self.cfg.AddNetwork(nobj, self.proc.GetECId(), check_uuid=False)
+    self.cfg.AddNetwork(self.nobj, self.proc.GetECId(), check_uuid=False)
 
 
 class LUNetworkRemove(LogicalUnit):
@@ -297,10 +298,6 @@ class LUNetworkSetParams(LogicalUnit):
         self.gateway = None
       else:
         self.gateway = self.op.gateway
-        if self.pool.IsReserved(self.gateway):
-          raise errors.OpPrereqError("Gateway IP address '%s' is already"
-                                     " reserved" % self.gateway,
-                                     errors.ECODE_STATE)
 
     if self.op.mac_prefix:
       if self.op.mac_prefix == constants.VALUE_NONE:
@@ -349,32 +346,27 @@ class LUNetworkSetParams(LogicalUnit):
     """
     #TODO: reserve/release via temporary reservation manager
     #      extend cfg.ReserveIp/ReleaseIp with the external flag
+    ec_id = self.proc.GetECId()
     if self.op.gateway:
       if self.gateway == self.network.gateway:
         self.LogWarning("Gateway is already %s", self.gateway)
       else:
         if self.gateway:
-          self.pool.Reserve(self.gateway, external=True)
+          self.cfg.ReserveIp(self.network_uuid, self.gateway, True, ec_id)
         if self.network.gateway:
-          self.pool.Release(self.network.gateway, external=True)
+          self.cfg.ReleaseIp(self.network_uuid, self.network.gateway, True, ec_id)
         self.network.gateway = self.gateway
 
     if self.op.add_reserved_ips:
       for ip in self.op.add_reserved_ips:
-        try:
-          self.pool.Reserve(ip, external=True)
-        except errors.AddressPoolError, err:
-          self.LogWarning("Cannot reserve IP address %s: %s", ip, err)
+        self.cfg.ReserveIp(self.network_uuid, ip, True, ec_id)
 
     if self.op.remove_reserved_ips:
       for ip in self.op.remove_reserved_ips:
         if ip == self.network.gateway:
           self.LogWarning("Cannot unreserve Gateway's IP")
           continue
-        try:
-          self.pool.Release(ip, external=True)
-        except errors.AddressPoolError, err:
-          self.LogWarning("Cannot release IP address %s: %s", ip, err)
+        self.cfg.ReleaseIp(self.network_uuid, ip, True, ec_id)
 
     if self.op.mac_prefix:
       self.network.mac_prefix = self.mac_prefix

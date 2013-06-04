@@ -705,10 +705,11 @@ class ConfigWriter(object):
     """Commit all reserved IP address to their respective pools
 
     """
-    for action, address, net_uuid in self._temporary_ips.GetECReserved(ec_id):
-      self._UnlockedCommitIp(action, net_uuid, address)
+    for action, address, net_uuid, external in \
+          self._temporary_ips.GetECReserved(ec_id):
+      self._UnlockedCommitIp(action, net_uuid, address, external)
 
-  def _UnlockedCommitIp(self, action, net_uuid, address):
+  def _UnlockedCommitIp(self, action, net_uuid, address, external):
     """Commit a reserved IP address to an IP pool.
 
     The IP address is taken from the network's IP pool and marked as reserved.
@@ -717,11 +718,11 @@ class ConfigWriter(object):
     nobj = self._UnlockedGetNetwork(net_uuid)
     pool = network.AddressPool(nobj)
     if action == constants.RESERVE_ACTION:
-      pool.Reserve(address)
+      pool.Reserve(address, external)
     elif action == constants.RELEASE_ACTION:
-      pool.Release(address)
+      pool.Release(address, external)
 
-  def _UnlockedReleaseIp(self, net_uuid, address, ec_id):
+  def _UnlockedReleaseIp(self, net_uuid, address, external, ec_id):
     """Give a specific IP address back to an IP pool.
 
     The IP address is returned to the IP pool designated by pool_id and marked
@@ -729,17 +730,18 @@ class ConfigWriter(object):
 
     """
     self._temporary_ips.Reserve(ec_id,
-                                (constants.RELEASE_ACTION, address, net_uuid))
+                                (constants.RELEASE_ACTION,
+                                address, net_uuid, external))
 
   @_ConfigSync(shared=1)
-  def ReleaseIp(self, net_uuid, address, ec_id):
+  def ReleaseIp(self, net_uuid, address, external, ec_id):
     """Give a specified IP address back to an IP pool.
 
     This is just a wrapper around _UnlockedReleaseIp.
 
     """
     if net_uuid:
-      self._UnlockedReleaseIp(net_uuid, address, ec_id)
+      self._UnlockedReleaseIp(net_uuid, address, external, ec_id)
 
   @_ConfigSync(shared=1)
   def GenerateIp(self, net_uuid, ec_id):
@@ -753,13 +755,15 @@ class ConfigWriter(object):
       try:
         ip = pool.GenerateFree()
       except errors.AddressPoolError:
-        raise errors.ReservationError("Cannot generate IP. Network is full")
-      return (constants.RESERVE_ACTION, ip, net_uuid)
+        raise errors.OpPrereqError("Cannot generate IP."
+                                   " Network '%s' is full." % nobj.name,
+                                   errors.ECODE_STATE)
+      return (constants.RESERVE_ACTION, ip, net_uuid, False)
 
-    _, address, _ = self._temporary_ips.Generate([], gen_one, ec_id)
+    _, address, _, _ = self._temporary_ips.Generate([], gen_one, ec_id)
     return address
 
-  def _UnlockedReserveIp(self, net_uuid, address, ec_id, check=True):
+  def _UnlockedReserveIp(self, net_uuid, address, external, ec_id, check=True):
     """Reserve a given IPv4 address for use by an instance.
 
     """
@@ -774,18 +778,21 @@ class ConfigWriter(object):
       raise errors.ReservationError("IP address already in use")
     if check and isextreserved:
       raise errors.ReservationError("IP is externally reserved")
+    if pool.IsReserved(address):
+      raise errors.OpPrereqError("IP address '%s' already in use." %
+                                 address, errors.ECODE_EXISTS)
 
     return self._temporary_ips.Reserve(ec_id,
                                        (constants.RESERVE_ACTION,
-                                        address, net_uuid))
+                                        address, net_uuid, external))
 
   @_ConfigSync(shared=1)
-  def ReserveIp(self, net_uuid, address, ec_id, check=True):
+  def ReserveIp(self, net_uuid, address, external, ec_id, check=True):
     """Reserve a given IPv4 address for use by an instance.
 
     """
     if net_uuid:
-      return self._UnlockedReserveIp(net_uuid, address, ec_id, check)
+      return self._UnlockedReserveIp(net_uuid, address, external, ec_id, check)
 
   @_ConfigSync(shared=1)
   def ReserveLV(self, lv_name, _ec_id):
@@ -1922,7 +1929,8 @@ class ConfigWriter(object):
     for nic in instance.nics:
       if nic.network and nic.ip:
         # Return all IP addresses to the respective address pools
-        self._UnlockedCommitIp(constants.RELEASE_ACTION, nic.network, nic.ip)
+        self._UnlockedCommitIp(constants.RELEASE_ACTION,
+                               nic.network, nic.ip, False)
 
     del self._ConfigData().instances[inst_uuid]
     self._ConfigData().cluster.serial_no += 1
@@ -3188,9 +3196,7 @@ class ConfigWriter(object):
     if isinstance(target, objects.Instance):
       self._UnlockedReleaseDRBDMinors(target.uuid)
 
-    if ec_id is not None:
-      # Commit all ips reserved by OpInstanceSetParams and OpGroupSetParams
-      self._UnlockedCommitTemporaryIps(ec_id)
+    self._UnlockedCommitTemporaryIps(ec_id)
 
     self._WriteConfig(feedback_fn=feedback_fn)
 

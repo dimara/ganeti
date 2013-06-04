@@ -971,6 +971,7 @@ class LUInstanceCreate(LogicalUnit):
                                  errors.ECODE_STATE)
 
     self._CalculateFileStorageDir()
+    ec_id = self.proc.GetECId()
 
     if self.op.mode == constants.INSTANCE_IMPORT:
       export_info = self._ReadExportInfo()
@@ -1033,8 +1034,7 @@ class LUInstanceCreate(LogicalUnit):
       self._RevertToDefaults(cluster)
 
     # NIC buildup
-    self.nics = _ComputeNics(self.op, cluster, self.check_ip, self.cfg,
-                             self.proc.GetECId())
+    self.nics = _ComputeNics(self.op, cluster, self.check_ip, self.cfg, ec_id)
 
     # disk checks/pre-build
     default_vg = self.cfg.GetVGName()
@@ -1079,7 +1079,7 @@ class LUInstanceCreate(LogicalUnit):
     # creation job will fail.
     for nic in self.nics:
       if nic.mac in (constants.VALUE_AUTO, constants.VALUE_GENERATE):
-        nic.mac = self.cfg.GenerateMAC(nic.network, self.proc.GetECId())
+        nic.mac = self.cfg.GenerateMAC(nic.network, ec_id)
 
     #### allocator run
 
@@ -1137,7 +1137,7 @@ class LUInstanceCreate(LogicalUnit):
         if nic.ip is not None:
           if nic.ip.lower() == constants.NIC_IP_POOL:
             try:
-              nic.ip = self.cfg.GenerateIp(net_uuid, self.proc.GetECId())
+              nic.ip = self.cfg.GenerateIp(net_uuid, ec_id)
             except errors.ReservationError:
               raise errors.OpPrereqError("Unable to get a free IP for NIC %d"
                                          " from the address pool" % idx,
@@ -1145,7 +1145,7 @@ class LUInstanceCreate(LogicalUnit):
             self.LogInfo("Chose IP %s from network %s", nic.ip, nobj.name)
           else:
             try:
-              self.cfg.ReserveIp(net_uuid, nic.ip, self.proc.GetECId(),
+              self.cfg.ReserveIp(net_uuid, nic.ip, ec_id,
                                  check=self.op.conflicts_check)
             except errors.ReservationError:
               raise errors.OpPrereqError("IP address %s already in use"
@@ -2988,14 +2988,13 @@ class LUInstanceSetParams(LogicalUnit):
         if new_ip.lower() == constants.NIC_IP_POOL:
           if new_net_uuid:
             try:
-              new_ip = self.cfg.GenerateIp(new_net_uuid, self.proc.GetECId())
+              new_ip = self.cfg.GenerateIp(new_net_uuid, ec_id)
             except errors.ReservationError:
               raise errors.OpPrereqError("Unable to get a free IP"
                                          " from the address pool",
                                          errors.ECODE_STATE)
             self.LogInfo("Chose IP %s from network %s",
-                         new_ip,
-                         new_net_obj.name)
+                         new_ip, new_net_obj.name)
             params[constants.INIC_IP] = new_ip
           else:
             raise errors.OpPrereqError("ip=pool, but no network found",
@@ -3003,7 +3002,7 @@ class LUInstanceSetParams(LogicalUnit):
         # Reserve new IP if in the new network if any
         elif new_net_uuid:
           try:
-            self.cfg.ReserveIp(new_net_uuid, new_ip, self.proc.GetECId(),
+            self.cfg.ReserveIp(new_net_uuid, new_ip, ec_id,
                                check=self.op.conflicts_check)
             self.LogInfo("Reserving IP %s in network %s",
                          new_ip, new_net_obj.name)
@@ -3018,7 +3017,7 @@ class LUInstanceSetParams(LogicalUnit):
       # release old IP if old network is not None
       if old_ip and old_net_uuid:
         try:
-          self.cfg.ReleaseIp(old_net_uuid, old_ip, self.proc.GetECId())
+          self.cfg.ReleaseIp(old_net_uuid, old_ip, False, ec_id)
         except errors.AddressPoolError:
           logging.warning("Release IP %s not contained in network %s",
                           old_ip, old_net_obj.name)
@@ -3536,7 +3535,7 @@ class LUInstanceSetParams(LogicalUnit):
       ip = params.ip
       net = params.network
       if net is not None and ip is not None:
-        self.cfg.ReleaseIp(net, ip, self.proc.GetECId())
+        self.cfg.ReleaseIp(net, ip, False, self.proc.GetECId())
 
     # Verify NIC changes (operating on copy)
     nics = [nic.Copy() for nic in self.instance.nics]
