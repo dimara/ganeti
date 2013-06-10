@@ -212,8 +212,8 @@ class AddressPool(GenericNetwork):
 
     """
     # pylint: disable=E1103
-    self.net.ext_reservations = self.ext_reservations.to01()
-    self.net.reservations = self.reservations.to01()
+    self.nobj.ext_reservations = self.ext_reservations.to01()
+    self.nobj.reservations = self.reservations.to01()
 
   def _Mark(self, address, value=True, external=False):
     idx = self._GetAddrIndex(address)
