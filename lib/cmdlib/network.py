@@ -108,10 +108,6 @@ class LUNetworkAdd(LogicalUnit):
     self.add_locks[locking.LEVEL_NETWORK] = self.network_uuid
 
   def CheckPrereq(self):
-    if self.op.network is None:
-      raise errors.OpPrereqError("Network must be given",
-                                 errors.ECODE_INVAL)
-
     try:
       existing_uuid = self.cfg.LookupNetwork(self.op.network_name)
     except errors.OpPrereqError:
@@ -135,11 +131,8 @@ class LUNetworkAdd(LogicalUnit):
                                 uuid=self.network_uuid)
 
     # Initialize the associated address pool
-    try:
-      self.pool = network.AddressPool.InitializeNetwork(self.nobj)
-    except errors.AddressPoolError, err:
-      raise errors.OpPrereqError("Cannot create IP address pool for network"
-                               " '%s': %s" % (self.op.network_name, err))
+    # This raises the appropriate OpPrereqError
+    self.pool = network.Network(self.nobj)
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -275,20 +268,22 @@ class LUNetworkSetParams(LogicalUnit):
     """Check prerequisites.
 
     """
-    self.network = self.cfg.GetNetwork(self.network_uuid)
+    self.nobj = self.cfg.GetNetwork(self.network_uuid)
     self.gateway = self.network.gateway
     self.mac_prefix = self.network.mac_prefix
     self.network6 = self.network.network6
     self.gateway6 = self.network.gateway6
     self.tags = self.network.tags
 
-    self.pool = network.AddressPool(self.network)
+    self.pool = network.Network(self.nobj)
 
     if self.op.gateway:
       if self.op.gateway == constants.VALUE_NONE:
         self.gateway = None
       else:
         self.gateway = self.op.gateway
+
+    network.Network.Check(self.gateway, self.network)
 
     if self.op.mac_prefix:
       if self.op.mac_prefix == constants.VALUE_NONE:
@@ -308,6 +303,8 @@ class LUNetworkSetParams(LogicalUnit):
         self.network6 = None
       else:
         self.network6 = self.op.network6
+
+    network.Network.Check(self.gateway, self.network)
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -371,6 +368,125 @@ class LUNetworkSetParams(LogicalUnit):
     self.pool.Validate()
 
     self.cfg.Update(self.network, feedback_fn)
+
+
+class NetworkQuery(QueryBase):
+  FIELDS = query.NETWORK_FIELDS
+
+  def ExpandNames(self, lu):
+    lu.needed_locks = {}
+    lu.share_locks = ShareAll()
+
+    self.do_locking = self.use_locking
+
+    all_networks = lu.cfg.GetAllNetworksInfo()
+    name_to_uuid = dict((n.name, n.uuid) for n in all_networks.values())
+
+    if self.names:
+      missing = []
+      self.wanted = []
+
+      for name in self.names:
+        if name in name_to_uuid:
+          self.wanted.append(name_to_uuid[name])
+        else:
+          missing.append(name)
+
+      if missing:
+        raise errors.OpPrereqError("Some networks do not exist: %s" % missing,
+                                   errors.ECODE_NOENT)
+    else:
+      self.wanted = locking.ALL_SET
+
+    if self.do_locking:
+      lu.needed_locks[locking.LEVEL_NETWORK] = self.wanted
+      if query.NETQ_INST in self.requested_data:
+        lu.needed_locks[locking.LEVEL_INSTANCE] = locking.ALL_SET
+      if query.NETQ_GROUP in self.requested_data:
+        lu.needed_locks[locking.LEVEL_NODEGROUP] = locking.ALL_SET
+
+  def DeclareLocks(self, lu, level):
+    pass
+
+  def _GetQueryData(self, lu):
+    """Computes the list of networks and their attributes.
+
+    """
+    all_networks = lu.cfg.GetAllNetworksInfo()
+
+    network_uuids = self._GetNames(lu, all_networks.keys(),
+                                   locking.LEVEL_NETWORK)
+
+    do_instances = query.NETQ_INST in self.requested_data
+    do_groups = query.NETQ_GROUP in self.requested_data
+
+    network_to_instances = None
+    network_to_groups = None
+
+    # For NETQ_GROUP, we need to map network->[groups]
+    if do_groups:
+      all_groups = lu.cfg.GetAllNodeGroupsInfo()
+      network_to_groups = dict((uuid, []) for uuid in network_uuids)
+      for _, group in all_groups.iteritems():
+        for net_uuid in network_uuids:
+          netparams = group.networks.get(net_uuid, None)
+          if netparams:
+            info = (group.name, netparams[constants.NIC_MODE],
+                    netparams[constants.NIC_LINK])
+
+            network_to_groups[net_uuid].append(info)
+
+    if do_instances:
+      all_instances = lu.cfg.GetAllInstancesInfo()
+      network_to_instances = dict((uuid, []) for uuid in network_uuids)
+      for instance in all_instances.values():
+        for nic in instance.nics:
+          if nic.network in network_uuids:
+            network_to_instances[nic.network].append(instance.name)
+            break
+
+    if query.NETQ_STATS in self.requested_data:
+      stats = \
+        dict((uuid, network.Network(all_networks[uuid]).GetStats())
+             for uuid in network_uuids)
+    else:
+      stats = None
+
+    return query.NetworkQueryData([all_networks[uuid]
+                                   for uuid in network_uuids],
+                                   network_to_groups,
+                                   network_to_instances,
+                                   stats)
+
+  @staticmethod
+  def _GetStats(pool):
+    """Returns statistics for a network address pool.
+
+    """
+    return {
+      "free_count": pool.GetFreeCount(),
+      "reserved_count": pool.GetReservedCount(),
+      "map": pool.GetMap(),
+      "external_reservations":
+        utils.CommaJoin(pool.GetExternalReservations()),
+      }
+
+
+class LUNetworkQuery(NoHooksLU):
+  """Logical unit for querying networks.
+
+  """
+  REQ_BGL = False
+
+  def CheckArguments(self):
+    self.nq = NetworkQuery(qlang.MakeSimpleFilter("name", self.op.names),
+                            self.op.output_fields, self.op.use_locking)
+
+  def ExpandNames(self):
+    self.nq.ExpandNames(self)
+
+  def Exec(self, feedback_fn):
+    return self.nq.OldStyleQuery(self)
 
 
 def _FmtNetworkConflict(details):
@@ -495,7 +611,7 @@ class LUNetworkConnect(LogicalUnit):
 
     # check only if not already connected
     elif self.op.conflicts_check:
-      pool = network.AddressPool(self.cfg.GetNetwork(self.network_uuid))
+      pool = network.Network(self.cfg.GetNetwork(self.network_uuid))
 
       _NetworkConflictCheck(
         self, lambda nic: pool.Contains(nic.ip), "connect to",

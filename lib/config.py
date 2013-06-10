@@ -716,7 +716,7 @@ class ConfigWriter(object):
 
     """
     nobj = self._UnlockedGetNetwork(net_uuid)
-    pool = network.AddressPool(nobj)
+    pool = network.Network(nobj)
     if action == constants.RESERVE_ACTION:
       pool.Reserve(address, external)
     elif action == constants.RELEASE_ACTION:
@@ -749,7 +749,7 @@ class ConfigWriter(object):
 
     """
     nobj = self._UnlockedGetNetwork(net_uuid)
-    pool = network.AddressPool(nobj)
+    pool = network.Network(nobj)
 
     def gen_one():
       try:
@@ -768,7 +768,7 @@ class ConfigWriter(object):
 
     """
     nobj = self._UnlockedGetNetwork(net_uuid)
-    pool = network.AddressPool(nobj)
+    pool = network.Network(nobj)
     try:
       isreserved = pool.IsReserved(address)
       isextreserved = pool.IsReserved(address, external=True)
@@ -3408,10 +3408,10 @@ class ConfigWriter(object):
     node_info = self._UnlockedGetNodeInfo(node_uuid)
     nodegroup_info = self._UnlockedGetNodeGroup(node_info.group)
     for net_uuid in nodegroup_info.networks.keys():
-      net_info = self._UnlockedGetNetwork(net_uuid)
-      pool = network.AddressPool(net_info)
+      nobj = self._UnlockedGetNetwork(net_uuid)
+      pool = network.Network(nobj)
       if pool.Contains(ip):
-        return (net_info.name, nodegroup_info.networks[net_uuid])
+        return (nobj.name, nodegroup_info.networks[net_uuid])
 
     return (None, None)
 

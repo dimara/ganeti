@@ -2817,7 +2817,7 @@ class NetworkQueryData(object):
 
 _NETWORK_SIMPLE_FIELDS = {
   "name": ("Network", QFT_TEXT, 0, "Name"),
-  "network": ("Subnet", QFT_TEXT, 0, "IPv4 subnet"),
+  "network": ("Subnet", QFT_OTHER, 0, "IPv4 subnet"),
   "gateway": ("Gateway", QFT_OTHER, 0, "IPv4 gateway"),
   "network6": ("IPv6Subnet", QFT_OTHER, 0, "IPv6 subnet"),
   "gateway6": ("IPv6Gateway", QFT_OTHER, 0, "IPv6 gateway"),

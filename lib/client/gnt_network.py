@@ -60,10 +60,6 @@ def AddNetwork(opts, args):
   """
   (network_name, ) = args
 
-  if opts.network is None:
-    raise errors.OpPrereqError("The --network option must be given",
-                               errors.ECODE_INVAL)
-
   if opts.tags is not None:
     tags = opts.tags.split(",")
   else:
@@ -214,7 +210,7 @@ def ShowNetworkConfig(_, args):
   for (name, network, gateway, network6, gateway6,
        mac_prefix, free_count, reserved_count,
        mapping, group_list, instances, ext_res, serial, uuid) in result:
-    size = free_count + reserved_count
+    pool = free_count or reserved_count or mapping or reserved_count
     ToStdout("Network name: %s", name)
     ToStdout("UUID: %s", uuid)
     ToStdout("Serial number: %d", serial)
@@ -223,20 +219,22 @@ def ShowNetworkConfig(_, args):
     ToStdout("  IPv6 Subnet: %s", network6)
     ToStdout("  IPv6 Gateway: %s", gateway6)
     ToStdout("  Mac Prefix: %s", mac_prefix)
-    ToStdout("  Size: %d", size)
-    ToStdout("  Free: %d (%.2f%%)", free_count,
-             100 * float(free_count) / float(size))
-    ToStdout("  Usage map:")
-    idx = 0
-    for line in textwrap.wrap(mapping, width=64):
-      ToStdout("     %s %s %d", str(idx).rjust(3), line.ljust(64), idx + 63)
-      idx += 64
-    ToStdout("         (X) used    (.) free")
+    if pool:
+      size = free_count + reserved_count
+      ToStdout("  Size: %d", size)
+      ToStdout("  Free: %d (%.2f%%)", free_count,
+               100 * float(free_count) / float(size))
+      ToStdout("  Usage map:")
+      idx = 0
+      for line in textwrap.wrap(mapping, width=64):
+        ToStdout("     %s %s %d", str(idx).rjust(3), line.ljust(64), idx + 63)
+        idx += 64
+      ToStdout("         (X) used    (.) free")
 
-    if ext_res:
-      ToStdout("  externally reserved IPs:")
-      for line in textwrap.wrap(ext_res, width=64):
-        ToStdout("    %s" % line)
+      if ext_res:
+        ToStdout("  externally reserved IPs:")
+        for line in textwrap.wrap(ext_res, width=64):
+          ToStdout("    %s" % line)
 
     if group_list:
       ToStdout("  connected to node groups:")
