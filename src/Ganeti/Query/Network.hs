@@ -152,7 +152,7 @@ getNetworkUuid cfg name =
 -- simply iterating over the reservations string.
 getReservations :: Maybe Ip4Network -> String -> [Ip4Address]
 getReservations Nothing = \_ -> []
-getReservations (Just $ Ip4Network net _) =
+getReservations (Just (Ip4Network net _)) =
   reverse .
   fst .
   foldl' (\(accu, addr) c ->

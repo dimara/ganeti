@@ -271,20 +271,21 @@ genValidNetwork = do
   mac_prefix <- genMaybe genName
   net <- arbitrary
   net6 <- genMaybe genIp6Net
-  gateway <- genMaybe arbitrary
-  gateway6 <- genMaybe genIp6Addr
-  res <- liftM Just (genBitString $ netmask2NumHosts netmask)
-  ext_res <- liftM Just (genBitString $ netmask2NumHosts netmask)
   uuid <- arbitrary
   ctime <- arbitrary
   mtime <- arbitrary
-  let n = Network name mac_prefix (Just $ Ip4Network net netmask) net6 gateway
-          gateway6 res ext_res uuid ctime mtime 0 Set.empty
+  res <- liftM Just (genBitString $ netmask2NumHosts netmask)
+  ext_res <- liftM Just (genZeroedBitString $ netmask2NumHosts netmask)
+  let n = Network name mac_prefix (Just $ Ip4Network net netmask) net6 Nothing
+          Nothing res ext_res uuid ctime mtime 0 Set.empty
   return n
 
 -- | Generate an arbitrary string consisting of '0' and '1' of the given length.
 genBitString :: Int -> Gen String
 genBitString len = vectorOf len (elements "01")
+
+genZeroedBitString :: Int -> Gen String
+genZeroedBitString len = vectorOf len (elements "0")
 
 -- | Generate an arbitrary string consisting of '0' and '1' of the maximum given
 -- length.
@@ -428,7 +429,8 @@ casePyCompatNetworks = do
               \for net in decoded:\n\
               \  a = network.Network(net)\n\
               \  if net.network:\n\
-              \    encoded.append((a._GetFreeCount(), a._GetReservedCount(), \\\n\
+              \    encoded.append((a._GetFreeCount(), \\\n\
+              \                   a._GetReservedCount(), \\\n\
               \                   net.ToDict()))\n\
               \  else:\n\
               \    encoded.append((-1, -1, \\\n\

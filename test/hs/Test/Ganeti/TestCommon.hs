@@ -45,6 +45,7 @@ module Test.Ganeti.TestCommon
   , genUUID
   , genMaybe
   , genSublist
+  , genNothing
   , genTags
   , genFields
   , genUniquesList
@@ -243,6 +244,9 @@ genSublist xs = choose (0, l) >>= g xs l
     g (y:ys) n k = frequency [ (k,     liftM (y :) (g ys (n - 1) (k - 1)))
                              , (n - k, g ys (n - 1) k)
                              ]
+
+genNothing :: a -> Maybe a
+genNothing _ = Nothing
 
 -- | Defines a tag type.
 newtype TagChar = TagChar { tagGetChar :: Char }
