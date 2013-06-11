@@ -754,7 +754,7 @@ class ConfigWriter(object):
     def gen_one():
       try:
         ip = pool.GenerateFree()
-      except errors.AddressPoolError:
+      except errors.NetworkError:
         raise errors.OpPrereqError("Cannot generate IP."
                                    " Network '%s' is full." % nobj.name,
                                    errors.ECODE_STATE)
