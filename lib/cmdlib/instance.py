@@ -2887,6 +2887,7 @@ class LUInstanceSetParams(LogicalUnit):
   def _PrepareNicModification(self, params, private, old_ip, old_net_uuid,
                               old_params, cluster, pnode_uuid):
 
+    ec_id = self.proc.GetECId()
     update_params_dict = dict([(key, params[key])
                                for key in constants.NICS_PARAMETERS
                                if key in params])
@@ -2899,9 +2900,6 @@ class LUInstanceSetParams(LogicalUnit):
     if new_net_uuid_or_name:
       new_net_uuid = self.cfg.LookupNetwork(new_net_uuid_or_name)
       new_net_obj = self.cfg.GetNetwork(new_net_uuid)
-
-    if old_net_uuid:
-      old_net_obj = self.cfg.GetNetwork(old_net_uuid)
 
     if new_net_uuid:
       netparams = self.cfg.GetGroupNetParams(new_net_uuid, pnode_uuid)

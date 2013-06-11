@@ -172,7 +172,7 @@ class LUNetworkAdd(LogicalUnit):
       for ip in self.op.add_reserved_ips:
         try:
           self.pool.Reserve(ip, external=True)
-        except errors.AddressPoolError, err:
+        except errors.NetworkError, err:
           raise errors.OpExecError("Cannot reserve IP address '%s': %s" %
                                    (ip, err))
 
@@ -269,11 +269,12 @@ class LUNetworkSetParams(LogicalUnit):
 
     """
     self.nobj = self.cfg.GetNetwork(self.network_uuid)
-    self.gateway = self.network.gateway
-    self.mac_prefix = self.network.mac_prefix
-    self.network6 = self.network.network6
-    self.gateway6 = self.network.gateway6
-    self.tags = self.network.tags
+    self.network = self.nobj.network
+    self.gateway = self.nobj.gateway
+    self.mac_prefix = self.nobj.mac_prefix
+    self.network6 = self.nobj.network6
+    self.gateway6 = self.nobj.gateway6
+    self.tags = self.nobj.tags
 
     self.pool = network.Network(self.nobj)
 
@@ -304,7 +305,7 @@ class LUNetworkSetParams(LogicalUnit):
       else:
         self.network6 = self.op.network6
 
-    network.Network.Check(self.gateway, self.network)
+    network.Network.Check(self.gateway6, self.network6)
 
   def BuildHooksEnv(self):
     """Build hooks env.
@@ -312,7 +313,7 @@ class LUNetworkSetParams(LogicalUnit):
     """
     args = {
       "name": self.op.network_name,
-      "subnet": self.network.network,
+      "subnet": self.network,
       "gateway": self.gateway,
       "network6": self.network6,
       "gateway6": self.gateway6,
@@ -336,15 +337,15 @@ class LUNetworkSetParams(LogicalUnit):
     #      extend cfg.ReserveIp/ReleaseIp with the external flag
     ec_id = self.proc.GetECId()
     if self.op.gateway:
-      if self.gateway == self.network.gateway:
+      if self.gateway == self.nobj.gateway:
         self.LogWarning("Gateway is already %s", self.gateway)
       else:
         if self.gateway:
           self.cfg.ReserveIp(self.network_uuid, self.gateway, True, ec_id)
-        if self.network.gateway:
+        if self.nobj.gateway:
           self.cfg.ReleaseIp(self.network_uuid,
-                             self.network.gateway, True, ec_id)
-        self.network.gateway = self.gateway
+                             self.nobj.gateway, True, ec_id)
+        self.nobj.gateway = self.gateway
 
     if self.op.add_reserved_ips:
       for ip in self.op.add_reserved_ips:
@@ -352,23 +353,21 @@ class LUNetworkSetParams(LogicalUnit):
 
     if self.op.remove_reserved_ips:
       for ip in self.op.remove_reserved_ips:
-        if ip == self.network.gateway:
+        if ip == self.nobj.gateway:
           self.LogWarning("Cannot unreserve Gateway's IP")
           continue
         self.cfg.ReleaseIp(self.network_uuid, ip, True, ec_id)
 
     if self.op.mac_prefix:
-      self.network.mac_prefix = self.mac_prefix
+      self.nobj.mac_prefix = self.mac_prefix
 
     if self.op.network6:
-      self.network.network6 = self.network6
+      self.nobj.network6 = self.network6
 
     if self.op.gateway6:
-      self.network.gateway6 = self.gateway6
+      self.nobj.gateway6 = self.gateway6
 
-    self.pool.Validate()
-
-    self.cfg.Update(self.network, feedback_fn)
+    self.cfg.Update(self.nobj, feedback_fn)
 
 
 class NetworkQuery(QueryBase):
