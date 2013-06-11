@@ -31,7 +31,6 @@ from ganeti.cli import *
 from ganeti import constants
 from ganeti import opcodes
 from ganeti import utils
-from ganeti import errors
 
 
 #: default list of fields for L{ListNetworks}
