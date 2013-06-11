@@ -30,6 +30,7 @@ from bitarray import bitarray
 from ganeti import errors
 from ganeti import utils
 from ganeti import constants
+import logging
 
 
 def _ComputeIpv4NumHosts(network_size):
@@ -79,6 +80,24 @@ class Network(object):
       raise errors.OpPrereqError("Address '%s' not in network '%s'." %
                                  (address, network),
                                  errors.ECODE_INVAL)
+
+  def Contains(self, address):
+    pass
+
+  def IsReserved(self, address):
+    pass
+
+  def Reserve(self, address, external):
+    pass
+
+  def Release(self, address, external):
+    pass
+
+  def GenerateFree(self):
+    pass
+
+  def GetStats(self):
+    pass
 
 
 class GenericNetwork(object):
@@ -145,6 +164,8 @@ class GenericNetwork(object):
     return False
 
   def IsReserved(self, address):
+    logging.info("Check if %s is reserved in network %s",
+                 address, self.nobj.name)
     return False
 
   def Reserve(self, address, external):
@@ -291,7 +312,7 @@ class AddressPool(GenericNetwork):
         msg = "IP %s is already externally reserved" % address
       else:
         msg = "IP %s is already used by an instance" % address
-      raise errors.AddressPoolError(msg)
+      raise errors.NetworkError(msg)
 
     self._Mark(address, external=external)
 
@@ -312,10 +333,10 @@ class AddressPool(GenericNetwork):
     """Returns the first available address.
 
     """
-    if self.IsFull():
-      raise errors.AddressPoolError("%s is full" % self.network)
+    if self._all_reservations.all():
+      raise errors.NetworkError("%s is full" % self.network)
 
-    idx = self.all_reservations.index(False)
+    idx = self._all_reservations.index(False)
     address = str(self.network[idx])
     self.Reserve(address)
     return address
@@ -323,7 +344,7 @@ class AddressPool(GenericNetwork):
   def GenerateFree(self):
     """Returns the first free address of the network.
 
-    @raise errors.AddressPoolError: Pool is full
+    @raise errors.NetworkError: Pool is full
 
     """
     idx = self._all_reservations.search(self.FREE, 1)

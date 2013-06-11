@@ -114,8 +114,8 @@ class ConfigVersionMismatch(ConfigurationError):
   """
 
 
-class AddressPoolError(GenericError):
-  """Errors related to IP address pools.
+class NetworkError(GenericError):
+  """Errors related to Networks.
 
   """
 
