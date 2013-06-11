@@ -342,7 +342,8 @@ class LUNetworkSetParams(LogicalUnit):
         if self.gateway:
           self.cfg.ReserveIp(self.network_uuid, self.gateway, True, ec_id)
         if self.network.gateway:
-          self.cfg.ReleaseIp(self.network_uuid, self.network.gateway, True, ec_id)
+          self.cfg.ReleaseIp(self.network_uuid,
+                             self.network.gateway, True, ec_id)
         self.network.gateway = self.gateway
 
     if self.op.add_reserved_ips:
