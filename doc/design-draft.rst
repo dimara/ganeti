@@ -24,6 +24,7 @@ Design document drafts
    design-systemd.rst
    design-cpu-speed.rst
    design-disk-conversion.rst
+   design-network2.rst
 
 .. vim: set textwidth=72 :
 .. Local Variables:
