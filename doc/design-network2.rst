@@ -66,6 +66,9 @@ have one L2 info per NIC.
 **L3**: A CIDR and a gateway related to the network. Since a NIC can
 have multiple IPs on the same cable each network can have multiple L3
 info with the restriction that they do not overlap with each other.
+The gateway is optional (just like with current implementation). No
+gateway can be used for private networks that do not have a default
+route.
 
 **subnet**: A subnet is the above L3 info plus some additional information
 (see below).
@@ -150,9 +153,8 @@ where some-ident can be either a CIDR, a name or a UUID. Ganeti will
 allow this operation only if no instances use IPs from this subnet.
 
 Since DHCP is allowed only for a single CIDR on the same cable, the
-subnet must have a `dhcp` flag. Logic must not allow more that one
-subnets of the same version in the same network to have dhcp enabled. To
-modify a subnet's name or dhcp flag one could use:
+subnet must have a `dhcp` flag. To modify a subnet's name or dhcp flag
+one could use:
 
 ::
 
@@ -160,8 +162,10 @@ modify a subnet's name or dhcp flag one could use:
 
 This would search for a registered subnet that matches the identifier,
 disable DHCP on it and change its name. If ``dhcp=true`` is passed,
-logic will first check if another subnet of the same version has dhcp
-enabled.
+logic will first check if another subnet of the same version (4 or 6)
+has dhcp enabled. The ``dhcp`` parameter is used only for validation
+purposes and does not make Ganeti starting a DHCP service. It will just
+be exported to exteranl scripts (ifup and hooks) and handled accordingly.
 
 Changing the CIDR or the gateway of a subnet should also be supported.
 
@@ -220,6 +224,15 @@ the subnet. If found, the range with empty reservations will be appended
 to the list of the subnet's pools. Moreover, logic must be added to
 reserve the IPs that are currently in use by instances of this network.
 
+Adding a pool can be easier if we associate it directly with a subnet.
+For example on could use the following shortcuts:
+
+::
+
+  gnt-network modify --subnet add:cidr=10.0.0.0/27,pool net1
+  gnt-network modify --pool add:subnet=some-ident
+  gnt-network modify --pool add:10.0.0.0/27 net1
+
 During pool removal, logic should be added to split pools if ranges
 given overlap existing ones. For example:
 
@@ -235,6 +248,11 @@ The same things apply to external reservations. Just like now,
 modifications will take place via the ``--add|remove-reserved-ips``
 option. Logic must be added to support IP ranges.
 
+::
+
+  gnt-network modify --add-reserved-ips 192.0.2.20-192.0.2.50 net1
+
+
 Based on the aforementioned we propose the following changes:
 
 1) Change the IP pool representation in config data.
@@ -248,6 +266,53 @@ Based on the aforementioned we propose the following changes:
   For external ranges the reservations bitarray is not needed
   since this will be all 1's.
 
+  A configuration example could be::
+
+    net1 {
+      subnets [
+        uuid1 {
+            name: subnet1
+            cidr: 192.0.2.0/24
+            pools: [
+              {range:Range(192.0.2.10, 192.0.2.15), reservations: 00000, name:pool1}
+              ]
+            reserved: [192.0.2.15]
+            }
+        uuid2  {
+            name: subnet2
+            cidr: 10.0.0.0/24
+            pools: [
+              {range:10.0.0.8/29, reservations: 00000000, name:pool3}
+              {range:10.0.0.40-10.0.0.45, reservations: 000000, name:pool3}
+              ]
+            reserved: [Range(10.0.0.8, 10.0.0.15), 10.2.4.5]
+            }
+        ]
+    }
+
+  Range(start, end) will be some json representation of an IPRange().
+  We decide not to store external reservations as pools (and in the
+  same list) since we get the following advantages:
+
+ - Keep the existing semantics for pools and external reservations.
+
+ - Each list has similar entries: one has pools the other has ranges.
+   The pool must have a bitarray, and has an optional name. It is
+   meaningless to add a name and a bitarray to external ranges.
+
+ - Each list must not have overlapping ranges. Still external
+   reservations can overlap with pools.
+
+ - The --pool option supports add|remove|modify command just like
+   `--net` and `--disk` and operate on single entities (a restriction that
+   is not needed for external reservations).
+
+ - Another thing, and probably the most important, is that in order to
+   get the first available IP, only the reserved list must be checked for
+   conflicts. The ipaddr.summarize_address_range(first, last) could be very
+   helpful.
+
+
 2) Change the network module logic.
 
   The above changes should be done in the network module and be transparent
@@ -260,6 +325,15 @@ Based on the aforementioned we propose the following changes:
   availability. All this logic will be extracted in a separate class
   with helper methods for easier manipulation of IP ranges and
   bitarrays.
+
+  Bitarray processing can be optimized too. The usage of bitarrays will
+  be reduced since (a) we no longer have `external_reservations` and (b)
+  pools will have shorter bitarrays (i.e. will not have to cover the whole
+  subnet). Besides that, we could keep the bitarrays in memory, so that
+  in most cases (e.g. adding/removing reservations, querying), we don't
+  keep converting strings to bitarrays and vice versa. Also, the Haskell
+  code could as well keep this in memory as a bitarray, and validate it
+  on load.
 
 3) Changes in config module.
 
@@ -300,13 +374,16 @@ inherits its mode and link. This rational will not change.
 
 Since this design adds support for multiple subnets per network, a NIC
 must be able to obtain multiple IPs from various subnets of the same
-network network. Thus we change the `ip` slot into a list.
+network. Thus we change the `ip` slot into list.
 
-During instance related operations it should be used something like:
+We introduce a new `ipX` attribute. For backwards compatibility `ip`
+will denote `ip0`.
+During instance related operations one could use something like:
 
 ::
 
-  gnt-instance add --net 0:ip=192.0.2.4,ip=pool,ip=some-pool-name,network=network1 inst1
+  gnt-instance add --net 0:ip0=192.0.2.4,ip1=pool,ip2=some-pool-name,network=network1 inst1
+  gnt-instance add --net 0:ip=pool,network1 inst1
 
 
 This will be parsed, converted to a proper list (e.g. ip = [192.0.2.4,
@@ -316,7 +393,26 @@ second IP will be retrieved from the first available pool of the first
 available subnet, and the third from the pool with the some-pool name.
 
 During instance modification, the `ip` option will refer to the first IP
-of the NIC, whereas the `ipx` will refer to the X'th IP.
+of the NIC, whereas the `ipX` will refer to the X'th IP. For example
+one should pass:
+
+::
+
+ --net 1:modify,ip1=1.2.3.10
+
+to change the second IP to 1.2.3.10,
+
+::
+
+  --net -1:add,ip0=pool,ip1=1.2.3.4,network=test
+
+to add a new NIC with two IPs, and
+
+::
+
+  --net 1:modify,ip1=none
+
+to remove the second IP.
 
 
 Configuration changes
@@ -325,7 +421,7 @@ Configuration changes
 IPRange config object:
   Introduce new config object that will hold ranges needed by pools, and
   reservations. It will be either a tuple of (start, size, end) or a
-  simple sting. The `end` is redundant and can derive from start and
+  simple string. The `end` is redundant and can derive from start and
   size in runtime, but will appear in the representation for readability
   and debug reasons.
 
@@ -392,6 +488,11 @@ option will refer to the first IP of the NIC.
 Hooks and scripts will still have the same environment exported in case
 of single IP per NIC.
 
+This design allows more fine-grained configurations which in turn yields
+more flexibility and a wider coverage of use cases. Still basic cases
+(the ones that are currently available) should be easy to set up.
+Documentation will be enriched with examples for both typical and
+advanced use cases of gnt-network.
 
 .. vim: set textwidth=72 :
 .. Local Variables:
