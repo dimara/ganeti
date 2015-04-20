@@ -50,7 +50,8 @@ from ganeti.cmdlib.common import INSTANCE_ONLINE, INSTANCE_DOWN, \
 from ganeti.cmdlib.instance_storage import StartInstanceDisks, \
   ShutdownInstanceDisks, ImageDisks
 from ganeti.cmdlib.instance_utils import BuildInstanceHookEnvByObject, \
-  CheckInstanceBridgesExist, CheckNodeFreeMemory, UpdateMetadata
+  CheckInstanceBridgesExist, CheckNodeFreeMemory, UpdateMetadata, \
+  GetItemFromContainer
 from ganeti.hypervisor import hv_base
 
 
@@ -643,3 +644,70 @@ class LUInstanceConsole(NoHooksLU):
     group = self.cfg.GetNodeGroup(node.group)
     return GetInstanceConsole(self.cfg.GetClusterInfo(),
                               self.instance, node, group)
+
+
+class LUInstanceSnapshot(LogicalUnit):
+  """Take a snapshot of the instance.
+
+  """
+  HPATH = "instance-snapshot"
+  HTYPE = constants.HTYPE_INSTANCE
+  REQ_BGL = False
+
+  def ExpandNames(self):
+    self._ExpandAndLockInstance()
+
+  def BuildHooksEnv(self):
+    """Build hooks env.
+
+    This runs on master, primary and secondary nodes of the instance.
+
+    """
+    return BuildInstanceHookEnvByObject(self, self.instance)
+
+  def BuildHooksNodes(self):
+    """Build hooks nodes.
+
+    """
+    nl = [self.cfg.GetMasterNode()] + \
+        list(self.cfg.GetInstanceNodes(self.instance.uuid))
+    return (nl, nl)
+
+  def CheckPrereq(self):
+    """Check prerequisites.
+
+    This checks that the instance is in the cluster and is not running.
+
+    """
+    instance = self.cfg.GetInstanceInfo(self.op.instance_uuid)
+    assert instance is not None, \
+      "Cannot retrieve locked instance %s" % self.op.instance_name
+    CheckNodeOnline(self, instance.primary_node, "Instance primary node"
+                    " offline, cannot snapshot")
+
+    disks = self.cfg.GetInstanceDisks(instance.uuid)
+
+    self.snapshots = []
+    for ident, params in self.op.disks:
+      idx, disk = GetItemFromContainer(ident, 'disk', disks)
+      snapshot_name = params.get("snapshot_name", None)
+      if not snapshot_name:
+        raise errors.OpPrereqError("No snapshot_name passed for disk %s", ident)
+      self.snapshots.append((idx, disk, snapshot_name))
+
+    self.instance = instance
+
+  def Exec(self, feedback_fn):
+    """Take a snapshot of the instance the instance.
+
+    """
+    inst = self.instance
+    node_uuid = inst.primary_node
+    for idx, disk, snapshot_name in self.snapshots:
+      feedback_fn("Taking a snapshot of instance...")
+      result = self.rpc.call_blockdev_snapshot(node_uuid,
+                                               (disk, inst),
+                                               snapshot_name,
+                                               None)
+      result.Raise("Could not take a snapshot for instance %s disk/%d %s"
+                   " on node %s" % (inst, idx, disk.uuid, inst.primary_node))

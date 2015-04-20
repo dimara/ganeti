@@ -121,6 +121,17 @@ instance (Arbitrary a) => Arbitrary (SetParamsMods a) where
                     , SetParamsNew        <$> arbitrary
                     ]
 
+instance Arbitrary ISnapParams where
+  arbitrary = ISnapParams <$> genNameNE
+
+-- SnapParamsStr will produce a random String which causes test
+-- fail because "OpCode has non-ASCII fields".
+-- The same happens with SetParamsNewName of SetParamsMods
+instance (Arbitrary a) => Arbitrary (SnapParams a) where
+  arbitrary = oneof [ pure SnapParamsEmpty
+                    , SnapParamsInt <$> arbitrary
+                    ]
+
 instance Arbitrary ExportTarget where
   arbitrary = oneof [ ExportTargetLocal <$> genNodeNameNE
                     , ExportTargetRemote <$> pure []
@@ -505,6 +516,8 @@ instance Arbitrary OpCodes.OpCode where
           arbitrary <*> genNameNE <*> genPrintableAsciiString <*> arbitrary
       "OP_NETWORK_DISCONNECT" ->
         OpCodes.OpNetworkDisconnect <$> genNameNE <*> genNameNE
+      "OP_INSTANCE_SNAPSHOT" ->
+        OpCodes.OpInstanceSnapshot <$> genFQDN <*> return Nothing <*> arbitrary
       "OP_RESTRICTED_COMMAND" ->
         OpCodes.OpRestrictedCommand <$> arbitrary <*> genNodeNamesNE <*>
           return Nothing <*> genNameNE
