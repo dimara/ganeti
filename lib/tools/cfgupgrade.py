@@ -43,6 +43,8 @@ import optparse
 import time
 import functools
 from cStringIO import StringIO
+from bitarray import bitarray
+from base64 import b64encode, b64decode
 
 from ganeti import cli
 from ganeti import constants
@@ -102,6 +104,12 @@ def ParseOptions(args=None):
   parser.add_option("--downgrade",
                     help="Downgrade to the previous stable version",
                     action="store_true", dest="downgrade", default=False)
+  parser.add_option("--tob64",
+                    help="Change to base64 encoded networks",
+                    action="store_true", dest="tob64", default=False)
+  parser.add_option("--to01",
+                    help="Change to non-encoded networks (01 bitarrays)",
+                    action="store_true", dest="to01", default=False)
   return parser.parse_args(args=args)
 
 
@@ -288,9 +296,36 @@ class CfgUpgrade(object):
     assert isinstance(self.config_data, dict)
     # pylint can't infer config_data type
     # pylint: disable=E1103
-    networks = self.config_data.get("networks", None)
+    networks = self.config_data.get("networks", {})
     if not networks:
       self.config_data["networks"] = {}
+
+    if self.opts.tob64 and self.opts.to01:
+      raise Error("Pass either --tob64 or --to01")
+
+    for nobj in networks.values():
+      for key in ("reservations", "ext_reservations"):
+        r = nobj[key]
+        name = nobj["name"]
+        modified = False
+        if self.opts.tob64:
+          try:
+            b = bitarray(r)
+            nobj[key] = b64encode(b.tobytes())
+            modified = True
+          except ValueError:
+            pass
+        if self.opts.to01:
+          try:
+            b = bitarray(r)
+          except ValueError:
+            b = bitarray()
+            b.frombytes(b64decode(r))
+            nobj[key] = b.to01()
+            modified = True
+
+        if modified:
+            print("Network %s: %s -> %s" % (name, r, nobj[key]))
 
   @OrFail("Upgrading cluster")
   def UpgradeCluster(self):
