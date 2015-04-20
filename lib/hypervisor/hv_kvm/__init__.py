@@ -1918,8 +1918,8 @@ class KVMHypervisor(hv_base.BaseHypervisor):
     utils.EnsureDirs([(self._InstanceNICDir(instance.name),
                      constants.RUN_DIRS_MODE)])
     for nic_seq, tap in enumerate(taps):
-      utils.WriteFile(self._InstanceNICFile(instance.name, nic_seq),
-                      data=tap)
+      nic = kvm_nics[nic_seq]
+      self._WriteInstanceNICFiles(instance.name, nic_seq, nic, tap)
 
     if vnc_pwd:
       change_cmd = "change vnc password %s" % vnc_pwd
@@ -2196,7 +2196,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       (tap, tapfds, vhostfds) = OpenTap(features=features)
       self._ConfigureNIC(instance, seq, device, tap)
       self.qmp.HotAddNic(device, kvm_devid, tapfds, vhostfds, features)
-      utils.WriteFile(self._InstanceNICFile(instance.name, seq), data=tap)
+      self._WriteInstanceNICFiles(instance.name, seq, device, tap)
 
     self._VerifyHotplugCommand(instance, kvm_devid, True)
     # update relevant entries in runtime file
@@ -2224,7 +2224,7 @@ class KVMHypervisor(hv_base.BaseHypervisor):
       self._CallMonitorCommand(instance.name, command)
     elif dev_type == constants.HOTPLUG_TARGET_NIC:
       self.qmp.HotDelNic(kvm_devid)
-      utils.RemoveFile(self._InstanceNICFile(instance.name, seq))
+      self._RemoveInstanceNICFiles(instance.name, seq, kvm_device)
     self._VerifyHotplugCommand(instance, kvm_devid, False)
     index = _DEVICE_RUNTIME_INDEX[dev_type]
     runtime[index].remove(entry)
