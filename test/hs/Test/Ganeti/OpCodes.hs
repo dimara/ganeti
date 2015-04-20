@@ -364,7 +364,7 @@ instance Arbitrary OpCodes.OpCode where
           <*> genMaybe arbitraryPrivateJSObj <*> genMaybe arbitraryPrivateJSObj
       "OP_INSTANCE_REMOVE" ->
         OpCodes.OpInstanceRemove <$> genFQDN <*> return Nothing <*>
-          arbitrary <*> arbitrary
+          arbitrary <*> arbitrary <*> arbitrary
       "OP_INSTANCE_RENAME" ->
         OpCodes.OpInstanceRename <$> genFQDN <*> return Nothing <*>
           genNodeNameNE <*> arbitrary <*> arbitrary
@@ -433,6 +433,7 @@ instance Arbitrary OpCodes.OpCode where
           <*> arbitrary                       -- hotplug
           <*> arbitrary                       -- hotplug_if_possible
           <*> arbitrary                       -- instance_communication
+          <*> arbitrary                       -- keep_disks
       "OP_INSTANCE_GROW_DISK" ->
         OpCodes.OpInstanceGrowDisk <$> genFQDN <*> return Nothing <*>
           arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary

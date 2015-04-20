@@ -113,6 +113,7 @@ module Ganeti.OpParams
   , pIgnoreIpolicy
   , pHotplug
   , pHotplugIfPossible
+  , pKeepDisks
   , pAllowRuntimeChgs
   , pInstDisks
   , pInstSnaps
@@ -622,6 +623,10 @@ pInstances =
   withDoc "List of instances" .
   defaultField [| [] |] $
   simpleField "instances" [t| [NonEmptyString] |]
+
+-- | Whether to remove disks.
+pKeepDisks :: Field
+pKeepDisks = defaultFalse "keep_disks"
 
 pOutputFields :: Field
 pOutputFields =

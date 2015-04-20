@@ -133,6 +133,7 @@ __all__ = [
   "IPOLICY_STD_SPECS_OPT",
   "IPOLICY_STD_SPECS_STR",
   "IPOLICY_VCPU_RATIO",
+  "KEEPDISKS_OPT",
   "LONG_SLEEP_OPT",
   "MAC_PREFIX_OPT",
   "MAINTAIN_NODE_HEALTH_OPT",
@@ -1592,6 +1593,10 @@ VERIFY_CLUTTER_OPT = cli_option(
 LONG_SLEEP_OPT = cli_option(
     "--long-sleep", default=False, dest="long_sleep",
     help="Allow long shutdowns when backing up instances", action="store_true")
+
+KEEPDISKS_OPT = cli_option("--keep-disks", dest="keep_disks",
+                           action="store_true", default=False,
+                           help="Do not remove disks")
 
 #: Options provided by all commands
 COMMON_OPTS = [DEBUG_OPT, REASON_OPT]
