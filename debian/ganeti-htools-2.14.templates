@@ -7,7 +7,7 @@
 # Even minor modifications require translation updates and such
 # changes should be coordinated with translators and reviewers.
 
-Template: ganeti-htools-2.12/abort-removal
+Template: ganeti-htools-2.14/abort-removal
 Type: boolean
 Default: true
 _Description: Abort ${package} removal?
