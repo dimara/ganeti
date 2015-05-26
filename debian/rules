@@ -117,8 +117,7 @@ override_dh_compress:
 	# files. The symlinks are shipped in the ganeti package, and because
 	# they are indirect links through /etc, they would not be detected by
 	# dh_compress anyway.
-	for file in $$(find $(CURDIR)/debian/ganeti/usr/share/man \
-			    $(CURDIR)/debian/ganeti-htools/usr/share/man \
+	for file in $$(find $(CURDIR)/debian/ganeti-htools/usr/share/man \
 			    -type l); do \
 		target=$$(readlink "$$file"); \
 		rm "$$file"; \
