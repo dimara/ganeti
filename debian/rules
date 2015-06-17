@@ -84,6 +84,7 @@ override_dh_install-indep:
 	cp $(CURDIR)/doc/examples/ganeti.initd $(CURDIR)/debian/ganeti.init
 	cp $(CURDIR)/doc/examples/ganeti.cron $(CURDIR)/debian/ganeti.cron.d
 	cp $(CURDIR)/doc/examples/ganeti.default $(CURDIR)/debian/ganeti.default
+	cp $(CURDIR)/doc/examples/ganeti.logrotate $(CURDIR)/debian/ganeti.logrotate
 
 	# Dummy Python module for the RAPI client
 	# Add missing bits to ganeti and python-ganeti-rapi.
