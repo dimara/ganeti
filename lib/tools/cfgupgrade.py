@@ -199,8 +199,10 @@ class CfgUpgrade(object):
         raise Error("Upgrade failed:\n%s", '\n'.join(self.errors))
 
     elif config_major == TARGET_MAJOR and config_minor == TARGET_MINOR:
-      logging.info("No changes necessary")
-
+      logging.info("No changes necessary. Use --force to re-run cfgupgrade")
+      if self.opts.force:
+        if not self.UpgradeAll():
+          raise Error("Upgrade failed:\n%s", '\n'.join(self.errors))
     else:
       raise Error("Configuration version %d.%d.%d not supported by this tool" %
                   (config_major, config_minor, config_revision))
@@ -325,7 +327,7 @@ class CfgUpgrade(object):
             modified = True
 
         if modified:
-            print("Network %s: %s -> %s" % (name, r, nobj[key]))
+            logging.info("Network %s: %s -> %s" % (name, r, nobj[key]))
 
   @OrFail("Upgrading cluster")
   def UpgradeCluster(self):
@@ -420,8 +422,8 @@ class CfgUpgrade(object):
       if name:
         uuid = network2uuid.get(name, None)
         if uuid:
-          print("NIC with network name %s found."
-                " Substituting with uuid %s." % (name, uuid))
+          logging.info("NIC with network name %s found."
+                       " Substituting with uuid %s." % (name, uuid))
           nic["network"] = uuid
 
   @classmethod
