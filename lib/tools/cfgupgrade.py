@@ -43,6 +43,8 @@ import optparse
 import time
 import functools
 from cStringIO import StringIO
+from bitarray import bitarray
+from base64 import b64encode, b64decode
 
 from ganeti import cli
 from ganeti import constants
@@ -102,6 +104,12 @@ def ParseOptions(args=None):
   parser.add_option("--downgrade",
                     help="Downgrade to the previous stable version",
                     action="store_true", dest="downgrade", default=False)
+  parser.add_option("--tob64",
+                    help="Change to base64 encoded networks",
+                    action="store_true", dest="tob64", default=False)
+  parser.add_option("--to01",
+                    help="Change to non-encoded networks (01 bitarrays)",
+                    action="store_true", dest="to01", default=False)
   return parser.parse_args(args=args)
 
 
@@ -191,8 +199,10 @@ class CfgUpgrade(object):
         raise Error("Upgrade failed:\n%s", '\n'.join(self.errors))
 
     elif config_major == TARGET_MAJOR and config_minor == TARGET_MINOR:
-      logging.info("No changes necessary")
-
+      logging.info("No changes necessary. Use --force to re-run cfgupgrade")
+      if self.opts.force:
+        if not self.UpgradeAll():
+          raise Error("Upgrade failed:\n%s", '\n'.join(self.errors))
     else:
       raise Error("Configuration version %d.%d.%d not supported by this tool" %
                   (config_major, config_minor, config_revision))
@@ -288,9 +298,36 @@ class CfgUpgrade(object):
     assert isinstance(self.config_data, dict)
     # pylint can't infer config_data type
     # pylint: disable=E1103
-    networks = self.config_data.get("networks", None)
+    networks = self.config_data.get("networks", {})
     if not networks:
       self.config_data["networks"] = {}
+
+    if self.opts.tob64 and self.opts.to01:
+      raise Error("Pass either --tob64 or --to01")
+
+    for nobj in networks.values():
+      for key in ("reservations", "ext_reservations"):
+        r = nobj[key]
+        name = nobj["name"]
+        modified = False
+        if self.opts.tob64:
+          try:
+            b = bitarray(r)
+            nobj[key] = b64encode(b.tobytes())
+            modified = True
+          except ValueError:
+            pass
+        if self.opts.to01:
+          try:
+            b = bitarray(r)
+          except ValueError:
+            b = bitarray()
+            b.frombytes(b64decode(r))
+            nobj[key] = b.to01()
+            modified = True
+
+        if modified:
+            logging.info("Network %s: %s -> %s" % (name, r, nobj[key]))
 
   @OrFail("Upgrading cluster")
   def UpgradeCluster(self):
@@ -385,8 +422,8 @@ class CfgUpgrade(object):
       if name:
         uuid = network2uuid.get(name, None)
         if uuid:
-          print("NIC with network name %s found."
-                " Substituting with uuid %s." % (name, uuid))
+          logging.info("NIC with network name %s found."
+                       " Substituting with uuid %s." % (name, uuid))
           nic["network"] = uuid
 
   @classmethod
