@@ -1,4 +1,17 @@
-snf-ganeti (2.14.4-1~bpo70+1) wheezy-backports; urgency=low
+snf-ganeti (2.14.0+patches-1~bpo70+1) wheezy-backports; urgency=low
+
+  * Official Ganeti plus custom patches:
+    + Support ifdown script for the KVM hypervisor
+    + Revert "Fix query mechanism wrt networks and vlans"
+    + LUInstanceSnapshot for the EXT disk template
+    + Change base64 encoded networks to 01 bitarrays via cfgupgrade
+    + Upgrade runtime files properly (add uri, remove physical_id)
+    + Add --keep-disks option
+    + Pass disk geometry in KVM command
+
+ -- Dimitris Aragiorgis <dimitris.aragiorgis@gmail.com>  Fri, 19 Jun 2015 16:37:11 +0300
+
+snf-ganeti (2.14.0-1~bpo70+1) wheezy-backports; urgency=low
 
   * Build 2.14 for wheezy-backports.
 
