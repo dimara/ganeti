@@ -362,6 +362,11 @@ start_master() {
   if use_systemctl; then
     systemctl start ganeti-master.target
   else
+    # Translate EXTRA_MASTERD_ARGS as EXTRA_WCONFD_ARGS and EXTRA_LUXID_ARGS
+    # These are usually --no-voting --yes-do-it
+    # (see StartMasterDaemons() in backend.py).
+    EXTRA_WCONFD_ARGS+=" $EXTRA_MASTERD_ARGS"
+    EXTRA_LUXID_ARGS+=" $EXTRA_MASTERD_ARGS"
     start ganeti-wconfd
     start ganeti-rapi
     start ganeti-luxid
