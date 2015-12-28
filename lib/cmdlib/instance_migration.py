@@ -982,7 +982,17 @@ class TLMigrateInstance(Tasklet):
 
     disk_template = self.cfg.GetInstanceDiskTemplate(self.instance.uuid)
     if disk_template in constants.DTS_EXT_MIRROR:
-      self._CloseInstanceDisks(source_node_uuid)
+      try:
+        self._CloseInstanceDisks(source_node_uuid)
+      except errors.OpExecError:
+        if self.ignore_consistency:
+          self.lu.LogWarning("Could not close instance disks on node %s,"
+                             " proceeding anyway.",
+                             self.cfg.GetNodeName(source_node_uuid))
+        else:
+          raise errors.OpExecError("Closing instance disks failed."
+                                   " Use --ignore-consistency to"
+                                   " force failover.")
 
     self.feedback_fn("* deactivating the instance's disks on source node")
     if not ShutdownInstanceDisks(self.lu, self.instance, ignore_primary=True):
